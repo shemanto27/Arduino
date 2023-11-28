@@ -4,7 +4,6 @@
 #include <Keypad.h>
 
 File dataFile;
-bool dataCollectionStarted = false;
 
 #define DHTPIN 4
 #define DHTTYPE DHT22
@@ -38,8 +37,22 @@ void setup() {
   delay(2000);
   dht.begin();
 
+  // Ask user for the unit of time for frequency
+  Serial.println("Choose the unit of time for data collection frequency:");
+  Serial.println("Press 1 for minutes, 2 for seconds, 3 for hours");
+
+  char unitKey = waitForValidKey('1', '3');
+
+  int multiplier = 60000; // Default unit is minutes
+
+  if (unitKey == '2') {
+    multiplier = 1000; // If user chooses seconds, change the multiplier
+  } else if (unitKey == '3') {
+    multiplier = 3600000; // If user chooses hours, change the multiplier
+  }
+
   // Ask user for data collection frequency
-  Serial.println("Enter the data collection frequency in minutes and press '#':");
+  Serial.println("Enter the data collection frequency and press '#':");
   String frequencyStr = "";
   
   while (true) {
@@ -53,10 +66,13 @@ void setup() {
     }
   }
 
-  int frequency = frequencyStr.toInt(); // Read the entered number
+  int frequency = frequencyStr.toInt() * multiplier; // Adjust the frequency based on the unit
+
   Serial.print("\nData will be collected every ");
-  Serial.print(frequency);
-  Serial.println(" minutes.");
+  Serial.print(frequency / multiplier); // Print the frequency without the multiplier
+  Serial.print(" ");
+  Serial.print((unitKey == '1') ? "minutes" : (unitKey == '2') ? "seconds" : "hours");
+  Serial.println(".");
 
   // Ask user for CSV file name
   Serial.println("Enter the CSV file name and press '#':");
@@ -66,27 +82,42 @@ void setup() {
     char key = keypad.getKey();
     
     if (key != NO_KEY) {
+      if (key == '#') {
+        break;
+      }
       Serial.print(key);
       fileName += key;
     }
-    
-    if (key == '#') {
-      break;
-    }
+  }
+
+  // Remove trailing '#' character if it exists
+  if (fileName.endsWith("#")) {
+    fileName.remove(fileName.length() - 1);
   }
   
   // Start collecting data
   collectData(frequency, fileName);
 }
 
+char waitForValidKey(char start, char end) {
+  char key;
+  while (true) {
+    key = keypad.getKey();
+    if (key >= start && key <= end) {
+      return key;
+    }
+  }
+}
+
 void collectData(int frequency, String fileName) {
   uint16_t line = 1;
+  const int buzzerPin = 7; // Adjust the pin number if necessary
 
   Serial.println("Data collecting has started.");
   Serial.print("Data will be written to file: ");
   Serial.println(fileName);
 
-  dataFile = SD.open(fileName.c_str(), FILE_WRITE);
+  dataFile = SD.open((fileName + ".csv").c_str(), FILE_WRITE);
 
   if (!dataFile) {
     Serial.println("Error opening file for writing");
@@ -94,7 +125,7 @@ void collectData(int frequency, String fileName) {
   }
 
   while (true) {
-    delay(frequency * 60000); // Convert minutes to milliseconds
+    delay(frequency);
 
     byte RH = dht.readHumidity();
     byte Temp = dht.readTemperature();
@@ -115,32 +146,9 @@ void collectData(int frequency, String fileName) {
 
     dataFile.flush(); // Ensure data is written to the file
 
-    // Check for commands to stop or restart data collection
-    if (keypad.isPressed('#')) {
-      char command = keypad.getKey();
-      
-      if (command == 'B') {
-        stopDataCollection();
-      } else if (command == 'C') {
-        restartDataCollection();
-      }
-    }
+    // Beep sound
+    tone(buzzerPin, 1000, 1000); // 1000 Hz for 1000 ms (1 second)
   }
-}
-
-void stopDataCollection() {
-  dataFile.close();
-  Serial.println("Data logger has stopped. Press #C to start the process from the beginning.");
-  while (!keypad.isPressed('C')) {
-    // Wait for user to press #C
-  }
-  restartDataCollection();
-}
-
-void restartDataCollection() {
-  dataFile = SD.open("DHT22Log.csv", FILE_WRITE); // Change the file name if needed
-  dataCollectionStarted = false;
-  setup();
 }
 
 void loop() {
