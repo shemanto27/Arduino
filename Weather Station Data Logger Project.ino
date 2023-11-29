@@ -24,12 +24,40 @@ byte colPins[COLS] = {30, 32, 34, 36};
 
 Keypad keypad = Keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
 
+void playOKSound(int buzzerPin) {
+  tone(buzzerPin, 880); // A4
+  delay(200);
+  noTone(buzzerPin);
+  delay(50);
+  
+  tone(buzzerPin, 987);  // B4
+  delay(200);
+  noTone(buzzerPin);
+  delay(50);
+  
+  tone(buzzerPin, 1046);  // C5
+  delay(200);
+  noTone(buzzerPin);
+  delay(50);
+}
+
+void playBipSound(int buzzerPin) {
+  tone(buzzerPin, 1000, 1000); // 1000 Hz for 1000 ms (1 second)
+  delay(1000);
+  noTone(buzzerPin);
+}
+
 void setup() {
   Serial.begin(9600);
+  
+  const int buzzerPin = 7; // Adjust the pin number if necessary
+  pinMode(buzzerPin, OUTPUT);
+
   Serial.print("Initializing SD card...");
 
   if (!SD.begin()) {
     Serial.println("Initialization failed! Insert SD Card");
+    playOKSound(buzzerPin);
     while (1);
   }
 
@@ -40,6 +68,7 @@ void setup() {
   // Ask user for the unit of time for frequency
   Serial.println("Choose the unit of time for data collection frequency:");
   Serial.println("Press 1 for minutes, 2 for seconds, 3 for hours");
+  playBipSound(buzzerPin);
 
   char unitKey = waitForValidKey('1', '3');
 
@@ -55,6 +84,8 @@ void setup() {
   Serial.println("Enter the data collection frequency and press '#':");
   String frequencyStr = "";
   
+  playBipSound(buzzerPin);
+
   while (true) {
     char key = keypad.getKey();
     
@@ -78,6 +109,8 @@ void setup() {
   Serial.println("Enter the CSV file name and press '#':");
   String fileName = "";
   
+  playBipSound(buzzerPin);
+
   while (true) {
     char key = keypad.getKey();
     
@@ -96,7 +129,7 @@ void setup() {
   }
   
   // Start collecting data
-  collectData(frequency, fileName);
+  collectData(frequency, fileName, buzzerPin);
 }
 
 char waitForValidKey(char start, char end) {
@@ -109,11 +142,12 @@ char waitForValidKey(char start, char end) {
   }
 }
 
-void collectData(int frequency, String fileName) {
+void collectData(int frequency, String fileName, int buzzerPin) {
   uint16_t line = 1;
-  const int buzzerPin = 7; // Adjust the pin number if necessary
 
   Serial.println("Data collecting has started.");
+  playOKSound(buzzerPin);
+  
   Serial.print("Data will be written to file: ");
   Serial.println(fileName);
 
