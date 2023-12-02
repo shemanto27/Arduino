@@ -4,8 +4,9 @@
 #include <DHT.h>
 #include <Keypad.h>
 
-LiquidCrystal_I2C lcd(0x27, 16, 2); // set the LCD address to 0x27 for a 16 chars and 2 line display
+const int buzzerPin = 7; // Declare buzzerPin as a global variable
 
+LiquidCrystal_I2C lcd(0x27, 16, 2); // set the LCD address to 0x27 for a 16 chars and 2 line display
 File dataFile;
 
 #define DHTPIN 4
@@ -27,7 +28,28 @@ byte colPins[COLS] = {30, 32, 34, 36};
 
 Keypad keypad = Keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
 
-void playOKSound(int buzzerPin) {
+void playIntroSound() {
+  tone(buzzerPin, 880); // A4
+  delay(200);
+  noTone(buzzerPin);
+  delay(50);
+  
+  tone(buzzerPin, 988);  // B4
+  delay(200);
+  noTone(buzzerPin);
+  delay(50);
+  
+  tone(buzzerPin, 1109);  // D5
+  delay(200);
+  noTone(buzzerPin);
+  delay(50);
+  
+  tone(buzzerPin, 1318); // E5
+  delay(400);
+  noTone(buzzerPin);
+}
+
+void playOKSound() {
   tone(buzzerPin, 880); // A4
   delay(200);
   noTone(buzzerPin);
@@ -44,7 +66,7 @@ void playOKSound(int buzzerPin) {
   delay(50);
 }
 
-void playBipSound(int buzzerPin) {
+void playBipSound() {
   tone(buzzerPin, 1000, 1000); // 1000 Hz for 1000 ms (1 second)
   delay(1000);
   noTone(buzzerPin);
@@ -55,7 +77,6 @@ void setup() {
   lcd.backlight();
   lcd.begin(16, 2); // Added to initialize the LCD size
 
-  const int buzzerPin = 7; // Adjust the pin number if necessary
   pinMode(buzzerPin, OUTPUT);
 
   lcd.setCursor(0, 0);
@@ -67,7 +88,7 @@ void setup() {
     lcd.clear();
     lcd.setCursor(0, 0);
     lcd.print("SD Card Error");
-    playOKSound(buzzerPin);
+    playOKSound();
     while (1);
   }
 
@@ -80,6 +101,7 @@ void setup() {
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print(" System Ready!");
+  playIntroSound();
 
   delay(2000);
   dht.begin();
@@ -96,19 +118,19 @@ void setup() {
   lcd.print("Press 1-Minute");
   lcd.setCursor(0, 1);
   lcd.print("2-Second,3-Hour");
-  playBipSound(buzzerPin);
+  playBipSound();
 
   char unitKey = waitForValidKey('1', '3');
 
   int multiplier = 60000; // Default unit is minutes
 
   if (unitKey == '2') {
-    multiplier = 1000; // If user chooses seconds, change the multiplier
+    multiplier = 1000; // If the user chooses seconds, change the multiplier
   } else if (unitKey == '3') {
-    multiplier = 3600000; // If user chooses hours, change the multiplier
+    multiplier = 3600000; // If the user chooses hours, change the multiplier
   }
 
-  // Ask user for data collection frequency
+  // Ask the user for data collection frequency
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print("Enter frequency");
@@ -116,7 +138,7 @@ void setup() {
   lcd.print("and press '#'");
   String frequencyStr = "";
   
-  playBipSound(buzzerPin);
+  playBipSound();
 
   while (true) {
     char key = keypad.getKey();
@@ -141,7 +163,7 @@ void setup() {
   lcd.print((unitKey == '1') ? " Min" : (unitKey == '2') ? " Sec" : " Hour");
   lcd.print(".");
 
-  // Ask user for CSV file name
+  // Ask the user for the CSV file name
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print("Enter CSV file");
@@ -149,7 +171,7 @@ void setup() {
   lcd.print("name & press '#'");
   String fileName = "";
   
-  playBipSound(buzzerPin);
+  playBipSound();
 
   while (true) {
     char key = keypad.getKey();
@@ -163,13 +185,13 @@ void setup() {
     }
   }
 
-  // Remove trailing '#' character if it exists
+  // Remove the trailing '#' character if it exists
   if (fileName.endsWith("#")) {
     fileName.remove(fileName.length() - 1);
   }
   
   // Start collecting data
-  collectData(frequency, fileName, buzzerPin);
+  collectData(frequency, fileName);
 }
 
 char waitForValidKey(char start, char end) {
@@ -182,7 +204,7 @@ char waitForValidKey(char start, char end) {
   }
 }
 
-void collectData(int frequency, String fileName, int buzzerPin) {
+void collectData(int frequency, String fileName) {
   uint16_t line = 1;
 
   lcd.clear();
@@ -190,7 +212,7 @@ void collectData(int frequency, String fileName, int buzzerPin) {
   lcd.print("Data collection");
   lcd.setCursor(0, 1);
   lcd.print("has started.");
-  playOKSound(buzzerPin);
+  playOKSound();
 
   lcd.clear();
   lcd.setCursor(0, 0);
@@ -206,7 +228,7 @@ void collectData(int frequency, String fileName, int buzzerPin) {
     lcd.print("Error opening file");
     lcd.setCursor(0, 1);
     lcd.print("for writing");
-    playOKSound(buzzerPin);
+    playOKSound();
     return;
   }
 
@@ -215,6 +237,11 @@ void collectData(int frequency, String fileName, int buzzerPin) {
 
     byte RH = dht.readHumidity();
     byte Temp = dht.readTemperature();
+
+    // Wind speed calculation
+    float sensorValue = analogRead(A0);
+    float voltage = (sensorValue / 1023.0) * 5.0;
+    float wind_speed = map(voltage, 0.01, 5, 0, 70);
 
     lcd.clear();
     lcd.setCursor(0, 0);
@@ -226,19 +253,20 @@ void collectData(int frequency, String fileName, int buzzerPin) {
     lcd.print(Temp);
     lcd.print("C H:");
     lcd.print(RH);
-    lcd.print("%");
+    lcd.print("% W:");
+    lcd.print(wind_speed, 2); // Display wind speed with 2 decimal places
+    lcd.print(" m/s");
 
     dataFile.print(line++);
     dataFile.print(": Temperature = ");
     dataFile.print(Temp);
     dataFile.print("°C, Humidity = ");
     dataFile.print(RH);
-    dataFile.println("%");
+    dataFile.print("% Wind Speed = ");
+    dataFile.print(wind_speed, 2);
+    dataFile.println(" m/s");
 
     dataFile.flush(); // Ensure data is written to the file
-
-    // Beep sound
-    playBipSound(buzzerPin);
   }
 }
 
