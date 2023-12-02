@@ -1,7 +1,10 @@
-#include <SPI.h>
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
 #include <SD.h>
 #include <DHT.h>
 #include <Keypad.h>
+
+LiquidCrystal_I2C lcd(0x27, 16, 2); // set the LCD address to 0x27 for a 16 chars and 2 line display
 
 File dataFile;
 
@@ -48,26 +51,51 @@ void playBipSound(int buzzerPin) {
 }
 
 void setup() {
-  Serial.begin(9600);
-  
+  lcd.init(); // initialize the LCD
+  lcd.backlight();
+  lcd.begin(16, 2); // Added to initialize the LCD size
+
   const int buzzerPin = 7; // Adjust the pin number if necessary
   pinMode(buzzerPin, OUTPUT);
 
-  Serial.print("Initializing SD card...");
+  lcd.setCursor(0, 0);
+  lcd.print("Initializing SD");
+  lcd.setCursor(0, 1);
+  lcd.print("card...");
 
   if (!SD.begin()) {
-    Serial.println("Initialization failed! Insert SD Card");
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("SD Card Error");
     playOKSound(buzzerPin);
     while (1);
   }
 
-  Serial.println("Initialization done. Collecting Data!");
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("  Initializing");
+  lcd.setCursor(0, 1);
+  lcd.print("  Data Logger");
+  delay(3000);
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print(" System Ready!");
+
   delay(2000);
   dht.begin();
 
   // Ask user for the unit of time for frequency
-  Serial.println("Choose the unit of time for data collection frequency:");
-  Serial.println("Press 1 for minutes, 2 for seconds, 3 for hours");
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Choose unit");
+  lcd.setCursor(0, 1);
+  lcd.print("of time:");
+  delay(3000);
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Press 1-Minute");
+  lcd.setCursor(0, 1);
+  lcd.print("2-Second,3-Hour");
   playBipSound(buzzerPin);
 
   char unitKey = waitForValidKey('1', '3');
@@ -81,7 +109,11 @@ void setup() {
   }
 
   // Ask user for data collection frequency
-  Serial.println("Enter the data collection frequency and press '#':");
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Enter frequency");
+  lcd.setCursor(0, 1);
+  lcd.print("and press '#'");
   String frequencyStr = "";
   
   playBipSound(buzzerPin);
@@ -91,7 +123,7 @@ void setup() {
     
     if (key >= '0' && key <= '9') {
       frequencyStr += key;
-      Serial.print(key);
+      lcd.print(key);
     } else if (key == '#') {
       break;
     }
@@ -99,14 +131,22 @@ void setup() {
 
   int frequency = frequencyStr.toInt() * multiplier; // Adjust the frequency based on the unit
 
-  Serial.print("\nData will be collected every ");
-  Serial.print(frequency / multiplier); // Print the frequency without the multiplier
-  Serial.print(" ");
-  Serial.print((unitKey == '1') ? "minutes" : (unitKey == '2') ? "seconds" : "hours");
-  Serial.println(".");
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Data will be");
+  lcd.setCursor(0, 1);
+  lcd.print("collected every");
+
+  lcd.print(frequency / multiplier);
+  lcd.print((unitKey == '1') ? " Min" : (unitKey == '2') ? " Sec" : " Hour");
+  lcd.print(".");
 
   // Ask user for CSV file name
-  Serial.println("Enter the CSV file name and press '#':");
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Enter CSV file");
+  lcd.setCursor(0, 1);
+  lcd.print("name & press '#'");
   String fileName = "";
   
   playBipSound(buzzerPin);
@@ -118,7 +158,7 @@ void setup() {
       if (key == '#') {
         break;
       }
-      Serial.print(key);
+      lcd.print(key);
       fileName += key;
     }
   }
@@ -145,16 +185,28 @@ char waitForValidKey(char start, char end) {
 void collectData(int frequency, String fileName, int buzzerPin) {
   uint16_t line = 1;
 
-  Serial.println("Data collecting has started.");
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Data collection");
+  lcd.setCursor(0, 1);
+  lcd.print("has started.");
   playOKSound(buzzerPin);
-  
-  Serial.print("Data will be written to file: ");
-  Serial.println(fileName);
+
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Data saving In");
+  lcd.setCursor(0, 1);
+  lcd.print(fileName);
 
   dataFile = SD.open((fileName + ".csv").c_str(), FILE_WRITE);
 
   if (!dataFile) {
-    Serial.println("Error opening file for writing");
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Error opening file");
+    lcd.setCursor(0, 1);
+    lcd.print("for writing");
+    playOKSound(buzzerPin);
     return;
   }
 
@@ -164,12 +216,17 @@ void collectData(int frequency, String fileName, int buzzerPin) {
     byte RH = dht.readHumidity();
     byte Temp = dht.readTemperature();
 
-    Serial.print(line);
-    Serial.print(": Temperature = ");
-    Serial.print(Temp);
-    Serial.print("°C, Humidity = ");
-    Serial.print(RH);
-    Serial.println("%");
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Readings No: ");
+    lcd.print(line);
+
+    lcd.setCursor(0, 1);
+    lcd.print("T:");
+    lcd.print(Temp);
+    lcd.print("C H:");
+    lcd.print(RH);
+    lcd.print("%");
 
     dataFile.print(line++);
     dataFile.print(": Temperature = ");
@@ -181,7 +238,7 @@ void collectData(int frequency, String fileName, int buzzerPin) {
     dataFile.flush(); // Ensure data is written to the file
 
     // Beep sound
-    tone(buzzerPin, 1000, 1000); // 1000 Hz for 1000 ms (1 second)
+    playBipSound(buzzerPin);
   }
 }
 
